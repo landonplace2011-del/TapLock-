@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hard Clicker</title>
+
+<style>
+  body {
+    font-family: Arial, sans-serif;
+    background:#111;
+    color:white;
+    text-align:center;
+    user-select:none;
+  }
+
+  .tapButton {
+    width:220px;
+    height:220px;
+    border-radius:50%;
+    font-size:28px;
+    border:none;
+    background:#00bfff;
+    color:black;
+    margin:20px;
+    touch-action:manipulation;
+  }
+
+  .tapButton:active { transform:scale(0.95); }
+
+  #energyBarContainer {
+    width:240px;
+    height:16px;
+    background:#333;
+    margin:10px auto;
+    border-radius:8px;
+    overflow:hidden;
+  }
+
+  #energyBar {
+    height:100%;
+    background:limegreen;
+    width:100%;
+  }
+
+  #bossBarContainer {
+    width:240px;
+    height:16px;
+    background:#400;
+    margin:10px auto;
+    border-radius:8px;
+    overflow:hidden;
+    display:none;
+  }
+
+  #bossBar {
+    height:100%;
+    background:red;
+    width:100%;
+  }
+
+  .hardcore { background:darkred; color:white; }
+
+  .popup {
+    position:fixed;
+    bottom:20px;
+    left:50%;
+    transform:translateX(-50%);
+    background:#222;
+    padding:12px 20px;
+    border-radius:10px;
+    animation:fade 3s forwards;
+  }
+
+  @keyframes fade {
+    0%{opacity:1}
+    80%{opacity:1}
+    100%{opacity:0}
+  }
+</style>
+</head>
+
+<body>
+
+<h1>Hard Clicker</h1>
+<div id="score">Score: 0</div>
+<div id="combo">Combo: x1</div>
+
+<button class="tapButton" id="tapBtn">TAP</button>
+
+<div id="energyBarContainer">
+  <div id="energyBar"></div>
+</div>
+
+<div id="bossBarContainer">
+  <div id="bossBar"></div>
+</div>
+
+<button id="upgradeClick">+ Click Power (50)</button>
+<button id="upgradeAuto">+ Auto Clicker (100)</button>
+<button id="hardcoreToggle">Hardcore: OFF</button>
+
+<script>
+/* ---------- STATE ---------- */
+let score=0, clickPower=1, autoPower=0;
+let energy=100, maxEnergy=100, energyRegen=0.8, clickEnergyCost=3;
+let hardcore=false;
+
+/* COMBO */
+let combo=1, comboTimer=null;
+
+/* BOSS */
+let bossActive=false;
+let bossHP=0, bossMaxHP=0;
+
+/* ACHIEVEMENTS */
+let achievements={
+  firstClick:false,
+  combo10:false,
+  bossKill:false,
+  hardcoreBoss:false
+};
+
+/* ---------- CLICK ---------- */
+tapBtn.onclick=()=>{
+  if(energy<=0) return;
+
+  energy-=clickEnergyCost;
+
+  if(bossActive){
+    bossHP-=clickPower*combo;
+    updateBoss();
+    if(bossHP<=0) defeatBoss();
+  } else {
+    score+=clickPower*combo;
+  }
+
+  combo++;
+  resetComboTimer();
+  checkAchievements();
+  updateUI();
+};
+
+/* ---------- COMBO RESET ---------- */
+function resetComboTimer(){
+  clearTimeout(comboTimer);
+  comboTimer=setTimeout(()=>{
+    combo=1;
+    updateUI();
+  },800);
+}
+
+/* ---------- ENERGY ---------- */
+setInterval(()=>{
+  energy=Math.min(maxEnergy,energy+energyRegen);
+  updateEnergy();
+},1000);
+
+/* ---------- AUTO ---------- */
+setInterval(()=>{
+  if(autoPower>0 && (!hardcore || energy>0)){
+    score+=autoPower;
+    updateUI();
+  }
+},1000);
+
+/* ---------- UPGRADES ---------- */
+upgradeClick.onclick=()=>{
+  if(score>=50){
+    score-=50;
+    clickPower++;
+    updateUI();
+  }
+};
+
+upgradeAuto.onclick=()=>{
+  if(score>=100){
+    score-=100;
+    autoPower++;
+    updateUI();
+  }
+};
+
+/* ---------- HARDCORE ---------- */
+hardcoreToggle.onclick=()=>{
+  hardcore=!hardcore;
+  hardcoreToggle.textContent=hardcore?"Hardcore: ON":"Hardcore: OFF";
+  hardcoreToggle.classList.toggle("hardcore",hardcore);
+  clickEnergyCost=hardcore?6:3;
+};
+
+/* ---------- BOSS SYSTEM ---------- */
+setInterval(()=>{
+  if(!bossActive && score>=500){
+    startBoss();
+  }
+},2000);
+
+function startBoss(){
+  bossActive=true;
+  bossMaxHP=hardcore?1500:1000;
+  bossHP=bossMaxHP;
+  bossBarContainer.style.display="block";
+  showPopup("👾 BOSS FIGHT!");
+}
+
+function updateBoss(){
+  bossBar.style.width=(bossHP/bossMaxHP*100)+"%";
+}
+
+function defeatBoss(){
+  bossActive=false;
+  bossBarContainer.style.display="none";
+  score+=500;
+  showPopup("🏆 Boss Defeated!");
+  achievements.bossKill=true;
+  if(hardcore) achievements.hardcoreBoss=true;
+  saveGame();
+}
+
+/* ---------- ACHIEVEMENTS ---------- */
+function checkAchievements(){
+  if(!achievements.firstClick){
+    achievements.firstClick=true;
+    showPopup("🎉 Achievement: First Click");
+  }
+  if(combo>=10 && !achievements.combo10){
+    achievements.combo10=true;
+    showPopup("🔥 Achievement: Combo x10");
+  }
+}
+
+/* ---------- UI ---------- */
+function updateUI(){
+  score=Math.floor(score);
+  scoreEl.textContent="Score: "+score;
+  comboEl.textContent="Combo: x"+combo;
+  updateEnergy();
+  saveGame();
+}
+
+function updateEnergy(){
+  let p=energy/maxEnergy*100;
+  energyBar.style.width=p+"%";
+  energyBar.style.background=p<25?"red":"limegreen";
+}
+
+/* ---------- POPUP ---------- */
+function showPopup(text){
+  let p=document.createElement("div");
+  p.className="popup";
+  p.textContent=text;
+  document.body.appendChild(p);
+  setTimeout(()=>p.remove(),3000);
+}
+
+/* ---------- SAVE ---------- */
+function saveGame(){
+  localStorage.setItem("hardClickerSave",JSON.stringify({
+    score,clickPower,autoPower,achievements
+  }));
+}
+
+function loadGame(){
+  let d=JSON.parse(localStorage.getItem("hardClickerSave"));
+  if(!d) return;
+  score=d.score;
+  clickPower=d.clickPower;
+  autoPower=d.autoPower;
+  achievements=d.achievements||achievements;
+  updateUI();
+}
+
+loadGame();
+</script>
+
+</body>
+</html>
